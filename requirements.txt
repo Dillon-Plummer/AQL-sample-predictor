@@ -2,7 +2,7 @@ Flask
 pandas
 numpy
 scipy
-pymc==5.10.3
+pymc
 statsmodels
 scikit-learn
 matplotlib
