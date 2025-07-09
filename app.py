@@ -10,7 +10,7 @@ import utils
 # --- App Configuration ---
 app = Flask(__name__)
 # A secret key is required for using sessions
-app.config['SECRET_KEY'] = 'THE_SECRET_KEY'
+app.config['SECRET_KEY'] = 'your-super-secret-key-change-me'
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max upload size
 
@@ -18,8 +18,6 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max upload size
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # --- Main Route ---
-
-
 @app.route('/')
 def index():
     """Renders the main application page."""
@@ -28,13 +26,11 @@ def index():
     return render_template('index.html')
 
 # --- Data Handling Routes ---
-
-
 @app.route('/upload_data', methods=['POST'])
 def upload_data():
     """Handles both CSV file uploads and demo data loading."""
     source = request.form.get('source')
-
+    
     if source == 'demo':
         # Use built-in demo data
         df = pd.DataFrame({
@@ -50,22 +46,21 @@ def upload_data():
             'message': f'Demo data loaded successfully ({len(df)} records).',
             'filename': 'Demo Data'
         })
-
+        
     elif source == 'upload' and 'csvFile' in request.files:
         file = request.files['csvFile']
         if file and file.filename.endswith('.csv'):
             filename = secure_filename(file.filename)
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
-
+            
             try:
                 df = pd.read_csv(filepath)
                 # Basic validation: check for required columns
-                required_cols = {'lot_size', 'supplier_rating',
-                                 'material_density', 'defect_rate'}
+                required_cols = {'lot_size', 'supplier_rating', 'material_density', 'defect_rate'}
                 if not required_cols.issubset(df.columns):
                     return jsonify({'status': 'error', 'message': f'CSV must contain columns: {required_cols}'}), 400
-
+                
                 # Store dataframe in session
                 session['df'] = df.to_json()
                 return jsonify({
@@ -77,7 +72,7 @@ def upload_data():
                 return jsonify({'status': 'error', 'message': f'Error processing CSV file: {e}'}), 500
         else:
             return jsonify({'status': 'error', 'message': 'Invalid file type. Please upload a CSV.'}), 400
-
+    
     return jsonify({'status': 'error', 'message': 'Invalid request.'}), 400
 
 
@@ -88,26 +83,25 @@ def run_step_1():
     """Runs the Bayesian model."""
     if 'df' not in session:
         return jsonify({'status': 'error', 'message': 'Data not found. Please load data first.'}), 400
-
+        
     data = request.get_json()
     prior_mean = float(data.get('prior_mean', 0))
     prior_sigma = float(data.get('prior_sigma', 1))
-
+    
     df = pd.read_json(session['df'])
-
+    
     try:
         # Run the Bayesian model
         trace, summary = models.run_bayesian_model(df, prior_mean, prior_sigma)
         session['posterior_summary'] = summary.to_json()
-
+        
         # Generate plots
         trace_plot_b64 = utils.create_trace_plot(trace)
         posterior_plot_b64 = utils.create_posterior_plot(trace)
-
+        
         # Format summary for display
-        summary_html = summary.to_html(
-            classes='table-auto w-full text-sm text-left')
-
+        summary_html = summary.to_html(classes='table-auto w-full text-sm text-left')
+        
         return jsonify({
             'status': 'success',
             'trace_plot': trace_plot_b64,
@@ -117,7 +111,6 @@ def run_step_1():
     except Exception as e:
         return jsonify({'status': 'error', 'message': f'Error in Bayesian model: {e}'}), 500
 
-
 @app.route('/run_step_2', methods=['POST'])
 def run_step_2():
     """Runs the Multiple Linear Regression model."""
@@ -125,10 +118,9 @@ def run_step_2():
         return jsonify({'status': 'error', 'message': 'Data not found.'}), 400
 
     df = pd.read_json(session['df'])
-
+    
     try:
-        results, shapiro_stat, shapiro_p, bp_stat, bp_p = models.run_linear_regression(
-            df)
+        results, shapiro_stat, shapiro_p, bp_stat, bp_p = models.run_linear_regression(df)
         session['regression_coeffs'] = results.params.to_json()
 
         # Generate QQ plot
@@ -136,7 +128,7 @@ def run_step_2():
 
         # Format results for display
         summary_html = results.summary().as_html()
-
+        
         return jsonify({
             'status': 'success',
             'summary_html': summary_html,
@@ -149,7 +141,6 @@ def run_step_2():
     except Exception as e:
         return jsonify({'status': 'error', 'message': f'Error in Linear Regression: {e}'}), 500
 
-
 @app.route('/run_step_3', methods=['POST'])
 def run_step_3():
     """Calculates the Hypergeometric risk score."""
@@ -158,18 +149,17 @@ def run_step_3():
 
     df = pd.read_json(session['df'])
     coeffs = pd.read_json(session['regression_coeffs'], typ='series')
-
+    
     try:
         risk_score = models.calculate_risk_score(df, coeffs)
         session['risk_score'] = risk_score
-
+        
         return jsonify({
             'status': 'success',
             'risk_score': f'{risk_score:.2f}'
         })
     except Exception as e:
         return jsonify({'status': 'error', 'message': f'Error calculating risk score: {e}'}), 500
-
 
 @app.route('/run_step_4', methods=['POST'])
 def run_step_4():
@@ -179,15 +169,14 @@ def run_step_4():
 
     risk_score = session['risk_score']
     df = pd.read_json(session['df'])
-
+    
     try:
-        aql, feature_importances, cv_score = models.run_random_forest_classifier(
-            df, risk_score)
+        aql, feature_importances, cv_score = models.run_random_forest_classifier(df, risk_score)
         session['final_aql'] = aql
 
         # Generate feature importance plot
         importance_plot_b64 = utils.create_importance_plot(feature_importances)
-
+        
         return jsonify({
             'status': 'success',
             'final_aql': aql,
