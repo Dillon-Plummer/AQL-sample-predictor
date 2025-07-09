@@ -10,7 +10,7 @@ import utils
 # --- App Configuration ---
 app = Flask(__name__)
 # A secret key is required for using sessions
-app.config['SECRET_KEY'] = 'your-super-secret-key-change-me'
+app.config['SECRET_KEY'] = 'THE_SECRET_KEY'
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max upload size
 
